@@ -1,43 +1,94 @@
-def detect_issue(log_text: str) -> dict:
-    """
-    Very simple rule-based detection.
-    Returns category and reason.
-    """
+from typing import List, Dict, Any
 
+
+def _top_evidence_lines(log_text: str, keywords: List[str], limit: int = 8) -> List[str]:
+    """
+    Return up to 'limit' lines that contain any of the keywords.
+    """
+    lines = log_text.splitlines()
+    hits = []
+    for line in lines:
+        low = line.lower()
+        if any(k in low for k in keywords):
+            hits.append(line.strip())
+        if len(hits) >= limit:
+            break
+    return hits
+
+
+def detect_issues(log_text: str) -> List[Dict[str, Any]]:
+    """
+    Detect multiple possible issues from the logs.
+    Returns a list of issues with category, reason, keywords, and evidence lines.
+    """
     text = log_text.lower()
 
-    if "timeout" in text:
-        return {
-            "category": "timeout",
-            "reason": "The logs contain timeout-related errors."
-        }
-
-    if "database" in text or "db" in text:
-        return {
-            "category": "database",
-            "reason": "The logs indicate a database-related failure."
-        }
-
-    if "out of memory" in text or "oom" in text or "out of memory" in text or "heap space" in text:
-        return {
+    patterns = [
+        {
             "category": "memory",
-            "reason": "The application ran out of memory."
-        }
-
-    if "unauthorized" in text or "forbidden" in text:
-        return {
+            "reason": "The application likely ran out of memory (OOM).",
+            "keywords": ["outofmemoryerror", "out of memory", "heap space", "oomkilled", "oom"],
+        },
+        {
+            "category": "timeout",
+            "reason": "Timeout detected (service call, DB, or network).",
+            "keywords": ["timeout", "timed out", "read timeout", "connect timeout"],
+        },
+        {
+            "category": "database",
+            "reason": "Database-related failure detected (connect/query/lock).",
+            "keywords": ["database", "jdbc", "sql", "deadlock", "connection refused", "too many connections"],
+        },
+        {
             "category": "authentication",
-            "reason": "Authentication or authorization failure detected."
-        }
-
-    if "dns" in text or "network" in text:
-        return {
+            "reason": "Authentication/authorization failure detected.",
+            "keywords": ["unauthorized", "forbidden", "invalid token", "access denied", "permission denied"],
+        },
+        {
             "category": "network",
-            "reason": "Network or DNS resolution issue detected."
-        }
+            "reason": "Network/DNS/connectivity issue detected.",
+            "keywords": ["dns", "no route to host", "network is unreachable", "connection reset", "name or service not known"],
+        },
+        {
+            "category": "disk",
+            "reason": "Disk/storage issue detected (space, IO).",
+            "keywords": ["no space left on device", "disk full", "i/o error", "filesystem", "read-only file system"],
+        },
+    ]
 
-    return {
-        "category": "unknown",
-        "reason": "No known error pattern detected."
-    }
+    issues = []
+    for p in patterns:
+        if any(k in text for k in p["keywords"]):
+            issues.append(
+                {
+                    "category": p["category"],
+                    "reason": p["reason"],
+                    "evidence": _top_evidence_lines(log_text, p["keywords"], limit=8),
+                    "keyword_hits": [k for k in p["keywords"] if k in text],
+                }
+            )
+
+    # If nothing matched, return unknown
+    if not issues:
+        issues.append(
+            {
+                "category": "unknown",
+                "reason": "No known error pattern detected. Need more context or different logs.",
+                "evidence": _top_evidence_lines(log_text, ["error", "exception", "failed", "fatal"], limit=8),
+                "keyword_hits": [],
+            }
+        )
+
+    return issues
+
+def rank_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Rank issues by:
+    1) number of keyword hits (more matches = more likely)
+    2) number of evidence lines
+    """
+    def score(issue: Dict[str, Any]) -> int:
+        return len(issue.get("keyword_hits", [])) * 2 + len(issue.get("evidence", []))
+
+    return sorted(issues, key=score, reverse=True)
 
