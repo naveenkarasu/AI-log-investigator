@@ -1,7 +1,10 @@
+import logging
 import os
 
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
+
+log = logging.getLogger(__name__)
 
 # Load .env if present (works locally). In Docker, env vars should be passed via --env-file.
 load_dotenv()
@@ -12,6 +15,15 @@ HF_TOKEN = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
 # A known public model id (and commonly used in HF examples)
 DEFAULT_MODEL = "ServiceNow-AI/Apriel-1.6-15b-Thinker"
 
+_client: InferenceClient | None = None
+
+
+def _get_client(model: str) -> InferenceClient:
+    global _client
+    if _client is None:
+        _client = InferenceClient(model=model, token=HF_TOKEN)
+    return _client
+
 
 def free_llm_analyze(prompt: str, model: str = DEFAULT_MODEL) -> str | None:
     """
@@ -19,9 +31,8 @@ def free_llm_analyze(prompt: str, model: str = DEFAULT_MODEL) -> str | None:
     Returns generated text or None if it fails (so our app can fallback to KB/heuristics).
     """
     try:
-        client = InferenceClient(model=model, token=HF_TOKEN)
+        client = _get_client(model)
 
-        # Chat-style completion (recommended for instruction-following models)
         resp = client.chat_completion(
             messages=[
                 {"role": "system", "content": "You are a helpful log analysis assistant."},
@@ -34,7 +45,5 @@ def free_llm_analyze(prompt: str, model: str = DEFAULT_MODEL) -> str | None:
         return resp.choices[0].message.content.strip()
 
     except Exception as e:
-        # Do not crash the API: we fallback to KB/heuristics
-        print(f"Free LLM error: {e}")
+        log.warning("Free LLM error: %s", e)
         return None
-

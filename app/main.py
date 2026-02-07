@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
@@ -7,13 +8,19 @@ from app.analyzer.heuristics import detect_issues, rank_issues
 from app.analyzer.kb_lookup import lookup_issue
 from app.analyzer.llm_free import free_llm_analyze
 
-app = FastAPI(title="AI Log Investigator", version="0.5.0")
+log = logging.getLogger(__name__)
+
+app = FastAPI(title="AI Log Investigator", version="0.6.0")
+
+MAX_LOG_SIZE = 1_000_000  # 1 MB
 
 
 class AnalyzeRequest(BaseModel):
-    log_text: str = Field(..., description="Raw log text to analyze")
-    app_name: str | None = None
-    environment: str | None = None
+    log_text: str = Field(
+        ...,
+        description="Raw log text to analyze",
+        max_length=MAX_LOG_SIZE,
+    )
 
 
 class Issue(BaseModel):
@@ -45,10 +52,9 @@ def _safe_json_parse(text: str) -> dict | None:
 
     text = text.strip()
 
-    # Try direct parse first
     try:
         return json.loads(text)
-    except Exception:
+    except json.JSONDecodeError:
         pass
 
     # Try to extract JSON block between first { and last }
@@ -58,7 +64,7 @@ def _safe_json_parse(text: str) -> dict | None:
         candidate = text[start : end + 1]
         try:
             return json.loads(candidate)
-        except Exception:
+        except json.JSONDecodeError:
             return None
 
     return None
@@ -115,7 +121,8 @@ Now output JSON:
             issues=issues
         )
 
-    # 5) If LLM fails or output is messy → KB fallback
+    # 5) If LLM fails or output is messy -> KB fallback
+    log.info("LLM unavailable or returned bad output, falling back to KB")
     kb = lookup_issue(top["category"])
     if kb:
         description = kb["description"]
@@ -132,4 +139,3 @@ Now output JSON:
         confidence=confidence,
         issues=issues
     )
-
