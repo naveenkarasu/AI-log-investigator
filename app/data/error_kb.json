@@ -1,0 +1,73 @@
+[
+  {
+    "keyword": "timeout",
+    "description": "Occurs when a request or connection takes too long and exceeds defined timeout limits.",
+    "causes": [
+      "Network congestion or latency",
+      "Service or database slow response",
+      "Improper timeout configuration"
+    ],
+    "fixes": [
+      "Increase timeout settings",
+      "Check network connection stability",
+      "Optimize dependent service performance"
+    ]
+  },
+  {
+    "keyword": "database",
+    "description": "Database related errors such as connection failure, lock issues, or query timeout.",
+    "causes": [
+      "Database service unreachable",
+      "Query performance issues",
+      "Too many connections"
+    ],
+    "fixes": [
+      "Check database server availability",
+      "Investigate slow queries",
+      "Increase connection pool limits"
+    ]
+  },
+  {
+    "keyword": "memory",
+    "description": "Application ran out of memory or hit memory limits.",
+    "causes": [
+      "Insufficient memory allocation",
+      "Memory leaks",
+      "Too many concurrent processes"
+    ],
+    "fixes": [
+      "Increase memory limits",
+      "Profile for memory leaks",
+      "Optimize process usage"
+    ]
+  },
+  {
+    "keyword": "authentication",
+    "description": "Authentication or permission failure while accessing a resource.",
+    "causes": [
+      "Invalid credentials",
+      "Expired tokens",
+      "Missing permissions"
+    ],
+    "fixes": [
+      "Check authentication credentials",
+      "Refresh access tokens",
+      "Ensure correct permission scopes"
+    ]
+  },
+  {
+    "keyword": "network",
+    "description": "Network or DNS related connectivity issues.",
+    "causes": [
+      "DNS resolution failures",
+      "Network outages",
+      "Firewall blocking"
+    ],
+    "fixes": [
+      "Verify DNS settings",
+      "Check network status",
+      "Review firewall rules"
+    ]
+  }
+]
+
