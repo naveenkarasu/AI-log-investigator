@@ -1,5 +1,7 @@
 # AI Log Investigator
 
+[Live Demo](https://naveenkarasu.github.io/AI-log-investigator/)
+
 Analyze application logs and get:
 - Detected issue categories (timeout, database, memory, auth, network, disk)
 - Evidence lines + keyword hits
