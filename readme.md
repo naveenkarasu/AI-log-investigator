@@ -1,152 +1,144 @@
-# AI Log Investigator 🔎🤖
+# AI Log Investigator
 
 Analyze application logs and get:
-- Detected issue categories (timeout, database, memory, auth, network, etc.)
+- Detected issue categories (timeout, database, memory, auth, network, disk)
 - Evidence lines + keyword hits
 - A concise root-cause summary with actionable fix steps
 - Reliable fallback when LLM is unavailable (local knowledge base + heuristics)
 
 ## Features
-- ✅ FastAPI API: `/analyze`, `/health`
-- ✅ CLI: analyze single file or a directory of logs
-- ✅ Free LLM integration (Hugging Face Inference Providers)
-- ✅ Fallbacks: Local KB → Heuristics
-- ✅ JSON output (easy to integrate into other tools)
+
+- FastAPI API with `/analyze` and `/health` endpoints
+- CLI to analyze single files or entire directories of logs
+- Free LLM integration (Hugging Face Inference API)
+- Three-tier fallback: LLM -> Knowledge Base -> Heuristics
+- Structured JSON output for easy integration
+- Docker support for containerized deployment
 
 ## Project Structure
-app/
-main.py
-analyzer/
-heuristics.py
-kb_lookup.py
-llm_free.py
-data/
-error_kb.json
-cli.py
-requirements.txt
 
-## Setup (Ubuntu)
+```
+app/
+  main.py                 # FastAPI application
+  analyzer/
+    heuristics.py         # Pattern-based issue detection and ranking
+    kb_lookup.py          # Knowledge base fallback lookup
+    llm_free.py           # Hugging Face free LLM client
+  data/
+    error_kb.json         # Knowledge base entries
+cli.py                    # Typer CLI interface
+Dockerfile                # Container build
+requirements.txt          # Python dependencies
+```
+
+## Setup
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
 
-Create '.env'
+Create a `.env` file:
+
+```
 HF_TOKEN=hf_your_token_here
+```
 
-Run API
+## Usage
 
-uvicorn app.main:app --reload
-
-Open:
-
-    http://127.0.0.1:8000/docs
-
-CLI usage
-Analyze one log file
-
-.venv/bin/python cli.py analyze test.log
-
-Analyze a directory (all .log/.txt)
-
-.venv/bin/python cli.py analyze-dir logs --out reports
-
-Notes
-
-    If LLM fails or rate-limits, tool falls back to KB + heuristics automatically.
-
-
-Save and exit.
-
----
-
-### Step 2 — Add example logs + example output (for screenshots)
-Create sample folder:
+### Run the API
 
 ```bash
-mkdir -p examples/logs examples/reports
+uvicorn app.main:app --reload
+```
 
-Create 3 sample logs:
+Open the interactive docs at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-echo "Connection timed out after 30s" > examples/logs/timeout.log
-echo "ERROR: database connection refused" > examples/logs/database.log
-echo "java.lang.OutOfMemoryError: Java heap space" > examples/logs/memory.log
+### CLI
 
-Generate reports:
+Analyze a single log file:
 
-.venv/bin/python cli.py analyze-dir examples/logs --out examples/reports
+```bash
+python cli.py analyze test.log
+```
 
-Step 3 — Add GitHub-friendly housekeeping files
-.gitignore
+Analyze all logs in a directory:
 
-nano .gitignore
+```bash
+python cli.py analyze-dir logs/ --out reports/
+```
 
-Paste:
+Check API health:
 
-.venv/
-__pycache__/
-*.pyc
-.env
-reports/
-logs/
-.DS_Store
+```bash
+python cli.py health
+```
 
-Step 4 — Add a simple test (so repo looks serious)
+### Docker
 
-Install pytest:
+```bash
+docker build -t ai-log-investigator .
+docker run -p 8000:8000 --env-file .env ai-log-investigator
+```
 
-pip install pytest
-pip freeze > requirements.txt
+## How It Works
 
-Create tests folder:
+1. **Heuristics** detect issue categories by pattern-matching keywords in log text
+2. **Ranking** scores issues by keyword hits and evidence count
+3. **LLM** (Hugging Face) generates root cause analysis and fix steps as JSON
+4. If LLM fails, **Knowledge Base** provides fallback descriptions and fixes
+5. If KB has no match, **heuristic summary** is returned as a last resort
 
-mkdir -p tests
-nano tests/test_heuristics.py
+## Detected Issue Categories
 
-Paste:
+| Category | Example Keywords |
+|----------|-----------------|
+| Memory | OutOfMemoryError, heap space, OOM |
+| Timeout | timed out, connection timeout |
+| Database | JDBC, SQL, deadlock, connection refused |
+| Authentication | unauthorized, forbidden, access denied |
+| Network | DNS, no route to host, connection reset |
+| Disk | no space left, disk full, I/O error |
 
-from app.analyzer.heuristics import detect_issues, rank_issues
+## API Reference
 
-def test_timeout_detection():
-    issues = detect_issues("Connection timed out after 30s")
-    issues = rank_issues(issues)
-    assert issues[0]["category"] == "timeout"
-    assert "timed out" in issues[0]["keyword_hits"][0].lower()
+### POST /analyze
 
-Run:
+**Request:**
 
-pytest -q
+```json
+{
+  "log_text": "java.lang.OutOfMemoryError: Java heap space",
+  "app_name": "my-service",
+  "environment": "production"
+}
+```
 
-Step 5 — Add GitHub Actions CI (auto test on every push)
+**Response:**
 
-Create:
+```json
+{
+  "summary": "Root cause: ...",
+  "top_category": "memory",
+  "confidence": 0.75,
+  "issues": [
+    {
+      "category": "memory",
+      "reason": "The application likely ran out of memory (OOM).",
+      "evidence": ["java.lang.OutOfMemoryError: Java heap space"],
+      "keyword_hits": ["outofmemoryerror", "heap space"]
+    }
+  ]
+}
+```
 
-mkdir -p .github/workflows
-nano .github/workflows/ci.yml
+### GET /health
 
-Paste:
+Returns `{"status": "ok"}` when the API is running.
 
-name: CI
+## Notes
 
-on:
-  push:
-  pull_request:
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run tests
-        run: pytest -q
+- If the LLM fails or hits rate limits, the tool falls back to KB + heuristics automatically
+- No API key is required for basic heuristic analysis
+- The HF_TOKEN enables enhanced LLM-powered root cause analysis
