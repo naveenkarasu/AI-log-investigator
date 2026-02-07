@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Log Investigator - Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+    }
+    .header {
+      background: linear-gradient(135deg, #161b22 0%, #1a2332 100%);
+      border-bottom: 1px solid #30363d;
+      padding: 2rem 1rem;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 2rem;
+      color: #58a6ff;
+      margin-bottom: 0.5rem;
+    }
+    .header p {
+      color: #8b949e;
+      font-size: 1.1rem;
+    }
+    .badges {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid #30363d;
+      background: #161b22;
+    }
+    .badge.python { color: #3572A5; border-color: #3572A5; }
+    .badge.fastapi { color: #009688; border-color: #009688; }
+    .badge.ai { color: #f78166; border-color: #f78166; }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+    .demo-section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .demo-section h2 {
+      color: #58a6ff;
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+    }
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      background: #0d1117;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0.75rem;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.875rem;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    textarea:focus { outline: none; border-color: #58a6ff; }
+    .btn-row {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 0.5rem 1.25rem;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #30363d; }
+    .btn-primary {
+      background: #238636;
+      border-color: #2ea043;
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-sample { font-size: 0.8rem; }
+    .results {
+      display: none;
+      margin-top: 1.5rem;
+    }
+    .results.show { display: block; }
+    .result-card {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .result-card h3 {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .category-tag {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 1rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .cat-memory { background: #da3633; color: #fff; }
+    .cat-timeout { background: #d29922; color: #fff; }
+    .cat-database { background: #8957e5; color: #fff; }
+    .cat-authentication { background: #f78166; color: #fff; }
+    .cat-network { background: #3fb950; color: #fff; }
+    .cat-disk { background: #768390; color: #fff; }
+    .cat-unknown { background: #484f58; color: #fff; }
+    .confidence-bar {
+      height: 6px;
+      background: #21262d;
+      border-radius: 3px;
+      margin: 0.75rem 0;
+      overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+    .conf-high { background: #3fb950; }
+    .conf-med { background: #d29922; }
+    .conf-low { background: #da3633; }
+    .evidence-list {
+      list-style: none;
+      margin-top: 0.5rem;
+    }
+    .evidence-list li {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.8rem;
+      color: #8b949e;
+      padding: 0.25rem 0.5rem;
+      border-left: 2px solid #30363d;
+      margin-bottom: 0.25rem;
+    }
+    .keyword-hits {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+    .keyword-hit {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      background: #1f2937;
+      border: 1px solid #30363d;
+      border-radius: 0.75rem;
+      color: #58a6ff;
+    }
+    .summary-box {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .summary-box h3 { color: #58a6ff; margin-bottom: 0.5rem; font-size: 1rem; }
+    .summary-box p { color: #c9d1d9; line-height: 1.5; }
+    .fixes-list {
+      list-style: none;
+      margin-top: 0.5rem;
+    }
+    .fixes-list li {
+      padding: 0.25rem 0;
+      color: #3fb950;
+      font-size: 0.875rem;
+    }
+    .fixes-list li::before {
+      content: "-> ";
+      color: #484f58;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .feature-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .feature-card h3 {
+      color: #58a6ff;
+      font-size: 0.95rem;
+      margin-bottom: 0.5rem;
+    }
+    .feature-card p {
+      color: #8b949e;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .footer {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: #484f58;
+      font-size: 0.85rem;
+      border-top: 1px solid #21262d;
+    }
+    .footer a { color: #58a6ff; text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+    .json-output {
+      display: none;
+      margin-top: 1rem;
+    }
+    .json-output.show { display: block; }
+    .json-output pre {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      color: #c9d1d9;
+    }
+    .toggle-json {
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+      color: #58a6ff;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .toggle-json:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>AI Log Investigator</h1>
+  <p>Paste your logs below and get instant issue detection and fix suggestions</p>
+  <div class="badges">
+    <span class="badge python">Python 3.12</span>
+    <span class="badge fastapi">FastAPI</span>
+    <span class="badge ai">Hugging Face LLM</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="features">
+    <div class="feature-card">
+      <h3>Pattern Detection</h3>
+      <p>Detects 6 issue categories: memory, timeout, database, authentication, network, and disk errors.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Evidence Extraction</h3>
+      <p>Extracts relevant log lines as evidence and highlights matching keywords for quick diagnosis.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Three-Tier Fallback</h3>
+      <p>LLM analysis with automatic fallback to knowledge base, then heuristics. Always returns results.</p>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>Try It - Live Heuristic Analysis</h2>
+    <textarea id="logInput" placeholder="Paste your log text here...
+
+Example:
+2024-01-15 10:23:45 ERROR - java.lang.OutOfMemoryError: Java heap space
+2024-01-15 10:23:45 ERROR - at com.myapp.service.DataProcessor.process(DataProcessor.java:142)"></textarea>
+
+    <div class="btn-row">
+      <button class="btn-primary" onclick="analyzeLog()">Analyze</button>
+      <button class="btn-sample" onclick="loadSample('memory')">Sample: Memory</button>
+      <button class="btn-sample" onclick="loadSample('timeout')">Sample: Timeout</button>
+      <button class="btn-sample" onclick="loadSample('database')">Sample: Database</button>
+      <button class="btn-sample" onclick="loadSample('auth')">Sample: Auth</button>
+      <button class="btn-sample" onclick="loadSample('network')">Sample: Network</button>
+      <button class="btn-sample" onclick="loadSample('disk')">Sample: Disk</button>
+    </div>
+
+    <div class="results" id="results"></div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <p>
+    <a href="https://github.com/naveenkarasu/AI-log-investigator">GitHub Repository</a>
+    &nbsp;&middot;&nbsp;
+    This demo runs heuristic detection client-side. Deploy the API for full LLM-powered analysis.
+  </p>
+</div>
+
+<script>
+const SAMPLES = {
+  memory: `2024-01-15 10:23:45 ERROR [main] com.myapp.service.DataProcessor - Processing failed
+2024-01-15 10:23:45 ERROR [main] java.lang.OutOfMemoryError: Java heap space
+    at com.myapp.service.DataProcessor.loadDataSet(DataProcessor.java:89)
+    at com.myapp.service.DataProcessor.process(DataProcessor.java:142)
+2024-01-15 10:23:46 WARN  [GC] GC overhead limit exceeded
+2024-01-15 10:23:46 ERROR [main] Application OOMKilled by container runtime`,
+
+  timeout: `2024-01-15 14:05:12 INFO  [http-pool-3] Sending request to payment-service
+2024-01-15 14:05:42 ERROR [http-pool-3] Connection timed out after 30s
+2024-01-15 14:05:42 ERROR [http-pool-3] Read timeout on POST /api/v2/payments
+2024-01-15 14:05:42 WARN  [retry-handler] Retry 1/3 for payment-service
+2024-01-15 14:06:12 ERROR [http-pool-3] Connect timeout - payment-service:8443 unreachable`,
+
+  database: `2024-01-15 09:12:33 ERROR [HikariPool-1] Connection refused to postgres-primary:5432
+2024-01-15 09:12:33 ERROR [jdbc] FATAL: too many connections for role "app_user"
+2024-01-15 09:12:34 ERROR [TransactionManager] SQL Error: deadlock detected
+    Detail: Process 2345 waits for ShareLock on transaction 9876
+2024-01-15 09:12:34 ERROR [HikariPool-1] Database connection pool exhausted`,
+
+  auth: `2024-01-15 16:45:01 WARN  [SecurityFilter] Unauthorized access attempt from 10.0.3.42
+2024-01-15 16:45:01 ERROR [AuthService] Invalid token - JWT signature verification failed
+2024-01-15 16:45:02 ERROR [APIGateway] 403 Forbidden - Access denied to /admin/users
+2024-01-15 16:45:02 WARN  [SecurityFilter] Permission denied for role VIEWER on resource ADMIN_PANEL`,
+
+  network: `2024-01-15 03:22:11 ERROR [resolver] DNS resolution failed for api.external-service.com
+2024-01-15 03:22:11 ERROR [resolver] Name or service not known: api.external-service.com
+2024-01-15 03:22:12 ERROR [http-client] No route to host: 10.255.0.1:443
+2024-01-15 03:22:13 WARN  [tcp-pool] Connection reset by peer on socket fd=42
+2024-01-15 03:22:13 ERROR [monitor] Network is unreachable for subnet 10.255.0.0/24`,
+
+  disk: `2024-01-15 22:10:05 ERROR [FileWriter] Failed to write to /var/log/app/output.log
+2024-01-15 22:10:05 ERROR [FileWriter] No space left on device
+2024-01-15 22:10:06 WARN  [DiskMonitor] Disk usage at 100% on /dev/sda1
+2024-01-15 22:10:06 ERROR [DataStore] I/O error writing to /data/cache/segment-0042
+2024-01-15 22:10:07 FATAL [System] Read-only file system - remounted due to disk errors`
+};
+
+const PATTERNS = [
+  {
+    category: "memory",
+    reason: "The application likely ran out of memory (OOM).",
+    keywords: ["outofmemoryerror", "out of memory", "heap space", "oomkilled", "oom"]
+  },
+  {
+    category: "timeout",
+    reason: "Timeout detected (service call, DB, or network).",
+    keywords: ["timeout", "timed out", "read timeout", "connect timeout"]
+  },
+  {
+    category: "database",
+    reason: "Database-related failure detected (connect/query/lock).",
+    keywords: ["database", "jdbc", "sql", "deadlock", "connection refused", "too many connections"]
+  },
+  {
+    category: "authentication",
+    reason: "Authentication/authorization failure detected.",
+    keywords: ["unauthorized", "forbidden", "invalid token", "access denied", "permission denied"]
+  },
+  {
+    category: "network",
+    reason: "Network/DNS/connectivity issue detected.",
+    keywords: ["dns", "no route to host", "network is unreachable", "connection reset", "name or service not known"]
+  },
+  {
+    category: "disk",
+    reason: "Disk/storage issue detected (space, IO).",
+    keywords: ["no space left on device", "disk full", "i/o error", "filesystem", "read-only file system"]
+  }
+];
+
+const KB = {
+  timeout: {
+    description: "Occurs when a request or connection takes too long and exceeds defined timeout limits.",
+    fixes: ["Increase timeout settings", "Check network connection stability", "Optimize dependent service performance"]
+  },
+  database: {
+    description: "Database related errors such as connection failure, lock issues, or query timeout.",
+    fixes: ["Check database server availability", "Investigate slow queries", "Increase connection pool limits"]
+  },
+  memory: {
+    description: "Application ran out of memory or hit memory limits.",
+    fixes: ["Increase memory limits", "Profile for memory leaks", "Optimize process usage"]
+  },
+  authentication: {
+    description: "Authentication or permission failure while accessing a resource.",
+    fixes: ["Check authentication credentials", "Refresh access tokens", "Ensure correct permission scopes"]
+  },
+  network: {
+    description: "Network or DNS related connectivity issues.",
+    fixes: ["Verify DNS settings", "Check network status", "Review firewall rules"]
+  }
+};
+
+function getEvidence(logText, keywords, limit = 8) {
+  const lines = logText.split('\n');
+  const hits = [];
+  for (const line of lines) {
+    const low = line.toLowerCase();
+    if (keywords.some(k => low.includes(k))) {
+      hits.push(line.trim());
+    }
+    if (hits.length >= limit) break;
+  }
+  return hits;
+}
+
+function detectIssues(logText) {
+  const text = logText.toLowerCase();
+  const issues = [];
+
+  for (const p of PATTERNS) {
+    if (p.keywords.some(k => text.includes(k))) {
+      issues.push({
+        category: p.category,
+        reason: p.reason,
+        evidence: getEvidence(logText, p.keywords),
+        keyword_hits: p.keywords.filter(k => text.includes(k))
+      });
+    }
+  }
+
+  if (issues.length === 0) {
+    issues.push({
+      category: "unknown",
+      reason: "No known error pattern detected. Need more context or different logs.",
+      evidence: getEvidence(logText, ["error", "exception", "failed", "fatal"]),
+      keyword_hits: []
+    });
+  }
+
+  issues.sort((a, b) => {
+    const scoreA = a.keyword_hits.length * 2 + a.evidence.length;
+    const scoreB = b.keyword_hits.length * 2 + b.evidence.length;
+    return scoreB - scoreA;
+  });
+
+  return issues;
+}
+
+function loadSample(type) {
+  document.getElementById('logInput').value = SAMPLES[type];
+  analyzeLog();
+}
+
+function analyzeLog() {
+  const logText = document.getElementById('logInput').value.trim();
+  const resultsDiv = document.getElementById('results');
+
+  if (!logText) {
+    resultsDiv.className = 'results';
+    return;
+  }
+
+  const issues = detectIssues(logText);
+  const top = issues[0];
+  const kb = KB[top.category];
+
+  let confidence = 0.25;
+  let summary = top.reason;
+  if (kb) {
+    summary = kb.description + ". Suggested fixes: " + kb.fixes.join("; ");
+    confidence = 0.50;
+  }
+
+  const confPercent = Math.round(confidence * 100);
+  const confClass = confidence >= 0.6 ? 'conf-high' : confidence >= 0.4 ? 'conf-med' : 'conf-low';
+
+  const response = {
+    summary: summary,
+    top_category: top.category,
+    confidence: confidence,
+    issues: issues
+  };
+
+  let html = `
+    <div class="summary-box">
+      <h3>Analysis Summary</h3>
+      <p>${summary}</p>
+      <div style="margin-top:0.75rem; display:flex; align-items:center; gap:0.75rem;">
+        <span class="category-tag cat-${top.category}">${top.category}</span>
+        <span style="color:#8b949e; font-size:0.85rem;">Confidence: ${confPercent}%</span>
+      </div>
+      <div class="confidence-bar">
+        <div class="confidence-fill ${confClass}" style="width:${confPercent}%"></div>
+      </div>`;
+
+  if (kb) {
+    html += `<div class="fixes-list"><strong style="color:#8b949e;font-size:0.85rem;">Suggested Fixes:</strong><ul class="fixes-list">`;
+    for (const fix of kb.fixes) {
+      html += `<li>${fix}</li>`;
+    }
+    html += `</ul></div>`;
+  }
+
+  html += `</div>`;
+
+  for (const issue of issues) {
+    html += `
+      <div class="result-card">
+        <h3>
+          <span class="category-tag cat-${issue.category}">${issue.category}</span>
+          <span style="color:#8b949e; font-size:0.85rem;">${issue.reason}</span>
+        </h3>`;
+
+    if (issue.keyword_hits.length > 0) {
+      html += `<div class="keyword-hits">`;
+      for (const kw of issue.keyword_hits) {
+        html += `<span class="keyword-hit">${kw}</span>`;
+      }
+      html += `</div>`;
+    }
+
+    if (issue.evidence.length > 0) {
+      html += `<ul class="evidence-list">`;
+      for (const ev of issue.evidence) {
+        html += `<li>${ev.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</li>`;
+      }
+      html += `</ul>`;
+    }
+
+    html += `</div>`;
+  }
+
+  html += `
+    <button class="toggle-json" onclick="toggleJson()">Show JSON Response</button>
+    <div class="json-output" id="jsonOutput">
+      <pre>${JSON.stringify(response, null, 2)}</pre>
+    </div>`;
+
+  resultsDiv.innerHTML = html;
+  resultsDiv.className = 'results show';
+}
+
+function toggleJson() {
+  const el = document.getElementById('jsonOutput');
+  el.classList.toggle('show');
+}
+</script>
+
+</body>
+</html>
