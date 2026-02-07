@@ -1,9 +1,13 @@
+import json
+
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-from typing import List
-from app.analyzer.heuristics import detect_issues, rank_issues
 
-app = FastAPI(title="AI Log Investigator", version="0.2.0")
+from app.analyzer.heuristics import detect_issues, rank_issues
+from app.analyzer.kb_lookup import lookup_issue
+from app.analyzer.llm_free import free_llm_analyze
+
+app = FastAPI(title="AI Log Investigator", version="0.5.0")
 
 
 class AnalyzeRequest(BaseModel):
@@ -15,15 +19,15 @@ class AnalyzeRequest(BaseModel):
 class Issue(BaseModel):
     category: str
     reason: str
-    evidence: List[str]
-    keyword_hits: List[str]
+    evidence: list[str]
+    keyword_hits: list[str]
 
 
 class AnalyzeResponse(BaseModel):
     summary: str
     top_category: str
     confidence: float
-    issues: List[Issue]
+    issues: list[Issue]
 
 
 @app.get("/health")
@@ -31,20 +35,99 @@ def health_check():
     return {"status": "ok"}
 
 
+def _safe_json_parse(text: str) -> dict | None:
+    """
+    Try to extract a JSON object from the model output.
+    Returns dict if successful, else None.
+    """
+    if not text:
+        return None
+
+    text = text.strip()
+
+    # Try direct parse first
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # Try to extract JSON block between first { and last }
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        candidate = text[start : end + 1]
+        try:
+            return json.loads(candidate)
+        except Exception:
+            return None
+
+    return None
+
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_logs(req: AnalyzeRequest):
-    issues = detect_issues(req.log_text)
 
-    # Pick the first issue as "top" (we'll improve ranking soon)
+    # 1) Detect and rank issues
+    issues = detect_issues(req.log_text)
+    issues = rank_issues(issues)
     top = issues[0]
 
-    # Simple confidence: higher if not unknown
-    confidence = 0.45 if top["category"] != "unknown" else 0.15
+    # 2) Base fallback summary
+    heuristic_summary = f"{top['reason']} Evidence lines: {len(top['evidence'])}."
 
-    summary = f"{top['reason']} Evidence lines: {min(len(top['evidence']), 3)} shown."
+    # 3) Ask LLM for STRICT JSON only
+    prompt = f"""
+You are a log analysis assistant.
+Return ONLY valid JSON. No extra text. No explanations.
+
+JSON schema:
+{{
+  "root_cause": "string",
+  "fix_steps": ["string", "string", "string"],
+  "confidence": 0.0
+}}
+
+Detected issues (from rules):
+{issues}
+
+Now output JSON:
+"""
+
+    llm_output = free_llm_analyze(prompt)
+
+    # 4) If LLM works and returns JSON, use it
+    parsed = _safe_json_parse(llm_output) if llm_output else None
+    if parsed and "root_cause" in parsed and "fix_steps" in parsed:
+        fix_steps = parsed.get("fix_steps", [])
+        if isinstance(fix_steps, list):
+            fix_text = " | ".join([str(x) for x in fix_steps if x])
+        else:
+            fix_text = str(fix_steps)
+
+        final_summary = f"Root cause: {parsed['root_cause']}. Fix: {fix_text}"
+        confidence = float(parsed.get("confidence", 0.65))
+        confidence = max(0.0, min(confidence, 1.0))
+
+        return AnalyzeResponse(
+            summary=final_summary,
+            top_category=top["category"],
+            confidence=confidence,
+            issues=issues
+        )
+
+    # 5) If LLM fails or output is messy → KB fallback
+    kb = lookup_issue(top["category"])
+    if kb:
+        description = kb["description"]
+        fixes = " ; ".join(kb["fixes"])
+        final_summary = f"{description}. Suggested fixes: {fixes}"
+        confidence = 0.50
+    else:
+        final_summary = heuristic_summary + " (LLM output not usable)"
+        confidence = 0.25
 
     return AnalyzeResponse(
-        summary=summary,
+        summary=final_summary,
         top_category=top["category"],
         confidence=confidence,
         issues=issues

@@ -1,7 +1,4 @@
-from typing import List, Dict, Any
-
-
-def _top_evidence_lines(log_text: str, keywords: List[str], limit: int = 8) -> List[str]:
+def _top_evidence_lines(log_text: str, keywords: list[str], limit: int = 8) -> list[str]:
     """
     Return up to 'limit' lines that contain any of the keywords.
     """
@@ -16,7 +13,7 @@ def _top_evidence_lines(log_text: str, keywords: List[str], limit: int = 8) -> L
     return hits
 
 
-def detect_issues(log_text: str) -> List[Dict[str, Any]]:
+def detect_issues(log_text: str) -> list[dict]:
     """
     Detect multiple possible issues from the logs.
     Returns a list of issues with category, reason, keywords, and evidence lines.
@@ -81,13 +78,13 @@ def detect_issues(log_text: str) -> List[Dict[str, Any]]:
 
     return issues
 
-def rank_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def rank_issues(issues: list[dict]) -> list[dict]:
     """
     Rank issues by:
     1) number of keyword hits (more matches = more likely)
     2) number of evidence lines
     """
-    def score(issue: Dict[str, Any]) -> int:
+    def score(issue: dict) -> int:
         return len(issue.get("keyword_hits", [])) * 2 + len(issue.get("evidence", []))
 
     return sorted(issues, key=score, reverse=True)

@@ -1,0 +1,7 @@
+fastapi>=0.128.0
+uvicorn>=0.40.0
+typer>=0.21.0
+huggingface_hub>=1.4.0
+python-dotenv>=1.2.0
+requests>=2.32.0
+pyyaml>=6.0.0
